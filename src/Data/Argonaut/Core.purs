@@ -70,7 +70,7 @@ module Data.Argonaut.Core
   type JNumber  = Number
   type JString  = String
   type JAssoc   = Tuple String Json
-  type JArray   = [Json]
+  type JArray   = Array Json
   type JObject  = M.StrMap Json
 
   foreign import data JNull :: *
@@ -159,12 +159,12 @@ module Data.Argonaut.Core
 
   -- Encoding
 
-  foreign import fromNull     "function fromNull(_){return null;}"  :: JNull -> Json
-  foreign import fromBoolean  "function fromBoolean(b){return b;}"  :: JBoolean -> Json
-  foreign import fromNumber   "function fromNumber(n){return n;}"   :: JNumber -> Json
-  foreign import fromString   "function fromString(s){return s;}"   :: JString -> Json
-  foreign import fromArray    "function fromArray(a){return a;}"    :: JArray -> Json
-  foreign import fromObject   "function fromObject(o){return o;}"   :: JObject -> Json
+  foreign import fromNull    :: JNull -> Json
+  foreign import fromBoolean :: JBoolean -> Json
+  foreign import fromNumber  :: JNumber -> Json
+  foreign import fromString  :: JString -> Json
+  foreign import fromArray   :: JArray -> Json
+  foreign import fromObject  :: JObject -> Json
 
   -- Default values
 
@@ -174,7 +174,7 @@ module Data.Argonaut.Core
   jsonFalse = fromBoolean false
   jsonZero :: Json
   jsonZero = fromNumber 0
-  foreign import jsonNull "var jsonNull = null;" :: Json
+  foreign import jsonNull :: Json
   jsonEmptyString :: Json
   jsonEmptyString = fromString ""
   jsonEmptyArray :: Json
@@ -238,104 +238,9 @@ module Data.Argonaut.Core
   instance ordJson :: Ord Json where
     compare a b = runFn5 _compare EQ GT LT a b
 
-  foreign import _stringify "function _stringify(j){ return JSON.stringify(j); }" :: Json -> String
+  foreign import _stringify :: Json -> String
 
-  foreign import _foldJson
-    "function _foldJson(isNull, isBool, isNum, isStr, isArr, isObj, j) {\
-    \   if (j == null) return isNull(null);                             \
-    \   else if (typeof j === 'boolean') return isBool(j);              \
-    \   else if (typeof j === 'number') return isNum(j);                \
-    \   else if (typeof j === 'string') return isStr(j);                \
-    \   else if (Object.prototype.toString.call(j) === '[object Array]') return isArr(j); \
-    \   else return isObj(j);                                           \
-    \}" :: forall z. Fn7 (JNull -> z) (JBoolean -> z) (JNumber -> z) (JString -> z) (JArray -> z) (JObject -> z) Json z
+  foreign import _foldJson :: forall z. Fn7 (JNull -> z) (JBoolean -> z) (JNumber -> z) (JString -> z) (JArray -> z) (JObject -> z) Json z
 
   -- very fast ordering for Json
-  foreign import _compare
-    """
-    function _compare(EQ, GT, LT, a, b) {
-      function isArray(a) {
-        return Object.prototype.toString.call(a) === '[object Array]';
-      }
-      function keys(o) {
-        var a = [];
-        for (var k in o) {
-          a.push(k);
-        }
-        return a;
-      }
-
-      if (a == null) {
-        if (b == null) return EQ;
-        else return LT;
-      } else if (typeof a === 'boolean') {
-        if (typeof b === 'boolean') {
-          // boolean / boolean
-          if (a === b) return EQ;
-          else if (a == false) return LT;
-          else return GT;
-        } else if (b == null) return GT;
-        else return LT;
-      } else if (typeof a === 'number') {
-        if (typeof b === 'number') {
-          if (a === b) return EQ;
-          else if (a < b) return LT;
-          else return GT;
-        } else if (b == null) return GT;
-        else if (typeof b === 'boolean') return GT;
-        else return LT;
-      } else if (typeof a === 'string') {
-        if (typeof b === 'string') {
-          if (a === b) return EQ;
-          else if (a < b) return LT;
-          else return GT;
-        } else if (b == null) return GT;
-        else if (typeof b === 'boolean') return GT;
-        else if (typeof b === 'number') return GT;
-        else return LT;
-      } else if (isArray(a)) {
-        if (isArray(b)) {
-          for (var i = 0; i < Math.min(a.length, b.length); i++) {
-            var c = _compare(EQ, GT, LT, a[i], b[i]);
-
-            if (c !== EQ) return c;
-          }
-          if (a.length === b.length) return EQ;
-          else if (a.length < b.length) return LT;
-          else return GT;
-        } else if (b == null) return GT;
-        else if (typeof b === 'boolean') return GT;
-        else if (typeof b === 'number') return GT;
-        else if (typeof b === 'string') return GT;
-        else return LT;
-      }
-      else {
-        if (b == null) return GT;
-        else if (typeof b === 'boolean') return GT;
-        else if (typeof b === 'number') return GT;
-        else if (typeof b === 'string') return GT;
-        else if (isArray(b)) return GT;
-        else {
-          var akeys = keys(a);
-          var bkeys = keys(b);
-
-          var keys = akeys.concat(bkeys).sort();
-
-          for (var i = 0; i < keys.length; i++) {
-            var k = keys[i];
-
-            if (a[k] === undefined) return LT;
-            else if (b[k] === undefined) return GT;
-
-            var c = _compare(EQ, GT, LT, a[k], b[k]);
-
-            if (c !== EQ) return c;
-          }
-
-          if (akeys.length === bkeys.length) return EQ;
-          else if (akeys.length < bkeys.length) return LT;
-          else return GT;
-        }
-      }
-    }
-    """ :: Fn5 Ordering Ordering Ordering Json Json Ordering
+  foreign import _compare :: Fn5 Ordering Ordering Ordering Json Json Ordering
